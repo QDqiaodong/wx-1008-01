@@ -5,6 +5,7 @@ import com.px.base.entity.FlightRoute;
 import com.px.base.repository.FlightRouteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 public class RouteService {
     private final FlightRouteRepository routeRepository;
     private final AdaptService adaptService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public FlightRoute create(RouteDTO dto) {
@@ -67,6 +69,8 @@ public class RouteService {
         }
         
         FlightRoute saved = routeRepository.save(route);
+        eventPublisher.publishEvent(new DutyReferenceChangedEvent(
+                DutyReferenceChangedEvent.ROUTE, saved.getId(), "航线或当前风级已更新"));
         log.info("更新航线: {}", saved.getRouteCode());
         return saved;
     }

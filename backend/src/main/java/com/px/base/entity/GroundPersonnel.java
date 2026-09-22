@@ -6,41 +6,32 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "anchor")
+@Table(name = "ground_personnel")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Anchor {
+public class GroundPersonnel {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "anchor_code", unique = true, nullable = false, length = 50)
-    private String anchorCode;
+    @Column(name = "employee_no", unique = true, nullable = false, length = 50)
+    private String employeeNo;
 
-    @Column(name = "max_weight", nullable = false, precision = 10, scale = 2)
-    private BigDecimal maxWeight;
+    @Column(name = "person_name", nullable = false, length = 100)
+    private String personName;
 
-    @Column(name = "min_wind_speed", nullable = false, precision = 5, scale = 2)
-    private BigDecimal minWindSpeed;
+    /** OPERATOR-普通值班员；SAFETY_MANAGER-安全主管。同一人也可以是持普通值班员身份的主管。 */
+    @Column(name = "role_code", nullable = false, length = 30)
+    private String roleCode;
 
-    @Column(name = "max_wind_speed", nullable = false, precision = 5, scale = 2)
-    private BigDecimal maxWindSpeed;
-
-    @Column(name = "anchor_zone", length = 50)
-    private String anchorZone;
-
-    @Column(name = "location_desc", length = 200)
-    private String locationDesc;
-
-    @Column(name = "status")
+    @Column(name = "active", nullable = false, columnDefinition = "TINYINT(1)")
     @Builder.Default
-    private Integer status = 1;
+    private Boolean active = true;
 
     @Column(name = "create_time", updatable = false)
     private LocalDateTime createTime;

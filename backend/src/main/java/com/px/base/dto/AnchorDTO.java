@@ -16,5 +16,6 @@ public class AnchorDTO {
     private BigDecimal maxWeight;
     private BigDecimal minWindSpeed;
     private BigDecimal maxWindSpeed;
+    private String anchorZone;
     private String locationDesc;
 }

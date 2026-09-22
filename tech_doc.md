@@ -774,3 +774,43 @@ PX_FAULT_ANCHOR_CODE=<锚点编号> SPRING_PROFILES_ACTIVE=local mvn spring-boot
 
 local profile 启动时幂等灌入验收样本（含 A-SF600「只适配强风、600kg」、稀缺锚 A-SCARCE-1800），并把启用锚点全量初始化进 Redis 排序缓存。
 
+---
+
+## 十三、地勤资质与开航值守
+
+### 13.1 口径拍板
+
+跨午夜飞行任务统一采用**按计划起飞时刻（起飞日）判断证书有效**。人员列表、值守详情、航线入口和后端 `DutyQualificationEvaluator` 共用该口径：证书只需在起飞日处于有效状态，并覆盖航线当前风级与全部在用锚点区域。
+
+不采用“覆盖整个预计飞行区间”的原因：预计结束时间受回收、天气和空管影响大，按区间会让跨夜航班因结束时刻跨入证书到期日而在起飞前反复变化；系统通过起飞前双人复核、主管取消和到期后不得新开航控制风险。
+
+### 13.2 状态链与快照
+
+- 证书：`PENDING` 待生效、`VALID` 有效、`EXPIRED` 已过期、`REVOKED` 已吊销；吊销为安全主管操作的终态。
+- 值守：`DRAFT` 草拟、`PENDING_REVIEW` 待复核、`READY` 就绪、`CANCELLED` 取消。
+- 操作员本人确认现场到位后才能进入待复核；复核员本人确认且两职分离、资质全覆盖后才进入就绪。
+- 就绪瞬间把证书编号、适用风级、锚点区域、有效期、人员姓名和判定日期冻结到 `duty_assignment.operator_snapshot/reviewer_snapshot`。之后人员档案或证书变化不回写历史。
+- 证书到期、吊销、风级/锚点区域变化后，未来且尚未就绪的值守由事务事件、查询刷新和定时任务立即退回草拟；READY/CANCELLED 与已结束记录保留快照。
+
+### 13.3 后端强制权限
+
+所有身份经 `X-Actor-Id` 请求头由 `ActorService` 解析：
+
+- 普通值班员只能调用本人安排的到位确认，不能代签到。
+- 复核员必须不同于操作员；非本安排复核员不能确认就绪。
+- 只有 `SAFETY_MANAGER` 可吊销证书或取消已就绪值守；服务端返回 403 且不写数据，不依赖前端按钮隐藏。
+
+### 13.4 新增接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/duty/policy` | 获取跨午夜口径、备选方案说明和状态链 |
+| GET/POST/PUT | `/api/duty/personnel` | 地勤人员列表与维护 |
+| POST/PUT | `/api/duty/certificates` | 资质证维护 |
+| POST | `/api/duty/certificates/{id}/revoke` | 安全主管吊销（需要 `X-Actor-Id`） |
+| GET | `/api/duty/route-entries?date=` | 航线入口同一资格结论 |
+| GET/POST | `/api/duty/assignments` | 当日值守查询/安排 |
+| POST | `/api/duty/assignments/{id}/arrive` | 操作员本人到位确认 |
+| POST | `/api/duty/assignments/{id}/ready` | 复核员本人确认就绪并冻结快照 |
+| POST | `/api/duty/assignments/{id}/cancel` | 安全主管取消已就绪值守 |
+

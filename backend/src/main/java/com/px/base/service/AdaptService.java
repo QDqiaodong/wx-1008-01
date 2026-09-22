@@ -13,6 +13,7 @@ import com.px.base.repository.FlightRouteRepository;
 import com.px.base.repository.RouteAnchorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class AdaptService {
     private final FlightRouteRepository flightRouteRepository;
     private final AdaptLogRepository adaptLogRepository;
     private final AnchorOccupancyRepository anchorOccupancyRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public AdaptResultDTO bindAnchor(Long routeId, Long anchorId) {
@@ -135,7 +137,9 @@ public class AdaptService {
                 .build();
         
         adaptLogRepository.save(logEntry);
-        
+        eventPublisher.publishEvent(new DutyReferenceChangedEvent(
+                DutyReferenceChangedEvent.ROUTE_BINDING, routeId, "航线绑定锚点变化"));
+
         log.info("绑定锚点: 航线{} - 锚点{}", route.getRouteCode(), anchor.getAnchorCode());
         
         return AdaptResultDTO.builder()
@@ -203,8 +207,10 @@ public class AdaptService {
                 .build();
         
         adaptLogRepository.save(logEntry);
-        
-        log.info("解绑锚点: 航线{} - 锚点{}", route != null ? route.getRouteCode() : routeId, 
+        eventPublisher.publishEvent(new DutyReferenceChangedEvent(
+                DutyReferenceChangedEvent.ROUTE_BINDING, routeId, "航线解绑锚点变化"));
+
+        log.info("解绑锚点: 航线{} - 锚点{}", route != null ? route.getRouteCode() : routeId,
                 anchor != null ? anchor.getAnchorCode() : anchorId);
         
         return AdaptResultDTO.builder()
@@ -305,6 +311,10 @@ public class AdaptService {
             }
         }
         
+        if (unbindCount > 0) {
+            eventPublisher.publishEvent(new DutyReferenceChangedEvent(
+                    DutyReferenceChangedEvent.ROUTE_BINDING, routeId, "风级变化导致在用锚点变化"));
+        }
         return AdaptResultDTO.builder()
                 .valid(true)
                 .routeId(routeId)

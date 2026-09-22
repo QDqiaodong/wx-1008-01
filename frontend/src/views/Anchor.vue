@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { ElTable, ElTableColumn, ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElSlider, ElMessage, ElSelect, ElOption } from 'element-plus'
 import type { Anchor, AnchorDTO } from '../api'
-import { anchorApi } from '../api'
+import { anchorApi, ANCHOR_ZONES } from '../api'
 
 const anchors = ref<Anchor[]>([])
 const dialogVisible = ref(false)
@@ -14,6 +14,7 @@ const form = ref<AnchorDTO>({
   maxWeight: 0,
   minWindSpeed: 0,
   maxWindSpeed: 0,
+  anchorZone: '',
   locationDesc: ''
 })
 
@@ -39,6 +40,7 @@ const handleAdd = () => {
     maxWeight: 0,
     minWindSpeed: 0,
     maxWindSpeed: 0,
+    anchorZone: '',
     locationDesc: ''
   }
   dialogVisible.value = true
@@ -52,6 +54,7 @@ const handleEdit = (anchor: any) => {
     maxWeight: anchor.maxWeight,
     minWindSpeed: anchor.minWindSpeed,
     maxWindSpeed: anchor.maxWindSpeed,
+    anchorZone: anchor.anchorZone || '',
     locationDesc: anchor.locationDesc
   }
   dialogVisible.value = true
@@ -120,6 +123,7 @@ onMounted(loadAnchors)
           {{ scope.row.minWindSpeed }} - {{ scope.row.maxWindSpeed }}
         </template>
       </ElTableColumn>
+      <ElTableColumn prop="anchorZone" label="锚点区域" />
       <ElTableColumn prop="locationDesc" label="位置描述" />
       <ElTableColumn prop="status" label="状态">
         <template #default="scope">
@@ -150,6 +154,11 @@ onMounted(loadAnchors)
         </ElFormItem>
         <ElFormItem label="适配气流上限(m/s)" required>
           <ElInputNumber v-model="form.maxWindSpeed" :min="0" :max="20" :step="0.5" />
+        </ElFormItem>
+        <ElFormItem label="锚点区域" required>
+          <ElSelect v-model="form.anchorZone" placeholder="选择区域" style="width: 100%">
+            <ElOption v-for="zone in ANCHOR_ZONES" :key="zone" :label="zone" :value="zone" />
+          </ElSelect>
         </ElFormItem>
         <ElFormItem label="位置描述">
           <ElInput v-model="form.locationDesc" />

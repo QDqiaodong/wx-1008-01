@@ -7,6 +7,7 @@ const menuItems = [
   { path: '/route', label: '航线管理' },
   { path: '/adapt', label: '适配校验' },
   { path: '/group-binding', label: '成组配桩预演' },
+  { path: '/duty', label: '地勤资质与值守' },
   { path: '/logs', label: '流水记录' }
 ]
 </script>

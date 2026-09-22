@@ -18,6 +18,7 @@ import jakarta.persistence.PessimisticLockException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -54,6 +55,7 @@ public class GroupBindService {
     private final AdaptAuditRecorder auditRecorder;
     private final PlatformTransactionManager transactionManager;
     private final com.px.base.repository.AdaptLogRepository adaptLogRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 验收用故障注入：当提交方案中包含该编号的锚点，并且它已写库写缓存后，
@@ -218,6 +220,8 @@ public class GroupBindService {
         }
 
             // bindIds 仅放绑定关系ID；流水ID走 logIds，二者不混
+            eventPublisher.publishEvent(new DutyReferenceChangedEvent(
+                    DutyReferenceChangedEvent.ROUTE_BINDING, route.getId(), "成组配桩导致在用锚点变化"));
             return new TxOutcome(true, List.copyOf(bindIds), List.copyOf(bindLogIds), rehearsal);
     }
 

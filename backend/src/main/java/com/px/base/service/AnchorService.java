@@ -5,6 +5,7 @@ import com.px.base.entity.Anchor;
 import com.px.base.repository.AnchorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ import java.util.Set;
 public class AnchorService {
     private final AnchorRepository anchorRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final String REDIS_KEY_WEIGHT = "anchor:weight";
     private static final String REDIS_KEY_WIND_MIN = "anchor:wind:min";
@@ -37,6 +39,7 @@ public class AnchorService {
                 .maxWeight(dto.getMaxWeight())
                 .minWindSpeed(dto.getMinWindSpeed())
                 .maxWindSpeed(dto.getMaxWindSpeed())
+                .anchorZone(normalizeZone(dto.getAnchorZone()))
                 .locationDesc(dto.getLocationDesc())
                 .status(1)
                 .build();
@@ -63,10 +66,13 @@ public class AnchorService {
         anchor.setMaxWeight(dto.getMaxWeight());
         anchor.setMinWindSpeed(dto.getMinWindSpeed());
         anchor.setMaxWindSpeed(dto.getMaxWindSpeed());
+        anchor.setAnchorZone(normalizeZone(dto.getAnchorZone()));
         anchor.setLocationDesc(dto.getLocationDesc());
         
         Anchor saved = anchorRepository.save(anchor);
         updateRedisCache(saved);
+        eventPublisher.publishEvent(new DutyReferenceChangedEvent(
+                DutyReferenceChangedEvent.ANCHOR, saved.getId(), "锚点区域已更新"));
         log.info("更新锚点: {}", saved.getAnchorCode());
         return saved;
     }
@@ -116,6 +122,13 @@ public class AnchorService {
             anchorRepository.findByAnchorCode((String) code).ifPresent(anchors::add);
         }
         return anchors;
+    }
+
+    private String normalizeZone(String zone) {
+        if (zone == null || zone.isBlank()) {
+            throw new IllegalArgumentException("请选择锚点区域");
+        }
+        return zone.trim();
     }
 
     private void updateRedisCache(Anchor anchor) {
