@@ -774,3 +774,71 @@ PX_FAULT_ANCHOR_CODE=<锚点编号> SPRING_PROFILES_ACTIVE=local mvn spring-boot
 
 local profile 启动时幂等灌入验收样本（含 A-SF600「只适配强风、600kg」、稀缺锚 A-SCARCE-1800），并把启用锚点全量初始化进 Redis 排序缓存。
 
+
+---
+
+# 地勤资质与开航值守（新增能力）
+
+## 1. 能力范围
+
+- **地勤人员档案（ground_staff）**：编号、姓名、角色（普通值班员 `STATION_OFFICER` / 安全主管 `SAFETY_OFFICER`）。
+- **地勤资质证（ground_cert）**：证号、持有人、适用风级（CSV 多选）、可负责锚点区域（CSV 多选）、生效日、到期日、吊销信息。
+  - 状态：`待生效 PENDING / 有效 VALID / 已过期 EXPIRED / 已吊销 REVOKED`。前三者按“参考时刻所在自然日”实时推导，不落库；吊销为终态。
+- **开航值守（flight_watch）**：按航线 + 飞行日安排一名操作员、一名复核员；含预计起飞时刻、预计结束时刻（可跨午夜）。
+  - 状态链：`草拟 DRAFT → 待复核 PENDING_REVIEW → 就绪 READY`，任意非就绪/就绪态可由授权人 `取消 CANCELLED`；READY、CANCELLED 均为终态。
+  - 状态推进硬闸门：只有操作员本人确认现场到位后进入待复核；只有被排班的复核员本人，在两人资质按起飞时刻实时全部合格时才能确认就绪。就绪即冻结历史快照。
+
+## 2. 跨午夜口径（已拍板，全系统唯一）
+
+统一按 **预计起飞时刻所在自然日** 判定证书有效性：起飞当日 ∈ [生效日, 到期日] 且证书未吊销即有效；**不要求证书覆盖整个预计飞行区间**。
+
+- 判定逻辑集中在 `com.px.base.rule.QualificationEvaluator`，人员列表试算、值守详情、航线入口三处共用，保证同一天、同航线结论一致。
+- 人员、值守、航线三个页面顶部固定展示口径文案与“为什么不采用覆盖整个预计飞行区间”的说明（`WatchPolicy.TAKEOFF_POLICY / REJECTED_POLICY_REASON`）。
+
+## 3. 资质覆盖规则
+
+- 一名人员必须凭 **同一张** 有效证书同时覆盖：航线当前风级（`flight_route.wind_level`）+ 该航线全部在用锚点区域（status=1 的 route_anchor 关联锚点的 `anchor.anchor_zone` 去重集合）。
+- 多张证书不能拼凑；多张候选证书取“覆盖缺失最少”的一张为代表证书（就绪时冻结它）。
+- 不通过时逐项返回缺口：`missingWindLevels`、`missingZones` 及自然语言 `detailMessages`，明确“哪名人员缺哪一段资格”。
+
+## 4. 职责分离与服务端强制（不依赖按钮显隐）
+
+- 请求通过 `X-Staff-Id` 头携带当前操作人，`CurrentUserResolver` 只按库中档案解析角色，前端无法自报角色提权。
+- 未带头/人员无效 → 401；越权 → 403（`GlobalExceptionHandler` 统一出口），数据不变更。
+- 规则：
+  - 操作员与复核员必须不同，创建/改派服务端直接拒绝同一人。
+  - 到位确认仅操作员本人可执行；普通值班员不能替别人确认。
+  - 复核就绪仅被排班复核员本人可执行：操作员不能复核自己，安全主管也不代行复核（主管特权仅限吊销证书、取消已就绪值守）。
+  - 证书吊销、取消【已就绪】值守：仅安全主管。
+  - 取消未就绪值守：本班操作员/复核员或安全主管。
+
+## 5. 重新判定与历史快照
+
+- 证书吊销在同一事务内立即扫描：仅 **未来飞行日 + 非终态（DRAFT/PENDING_REVIEW）** 的相关值守打回草拟、清空到位标记并写明原因；READY/CANCELLED 与过去的值守永不改动。
+- 证书到期、航线风级/锚点区域变化、改飞行时刻：走“读时重算”，非终态值守查看时一律按当前数据与起飞时刻重新评估，无需定时器且结论天然一致。
+- 就绪时在 flight_watch 行内冻结快照：姓名、证书编号、证书适用范围、当时航线风级、要求区域、起飞/结束时刻。之后人员改名、证书吊销或范围修改都不影响已结束历史。
+
+## 6. 主要接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/ground/meta | 风级、区域、跨午夜口径与被否方案原因 |
+| GET/POST/PUT/DELETE | /api/ground/staff | 人员档案；列表支持 routeId+takeoff 胜任度试算 |
+| GET/POST | /api/ground/cert/staff/{id}[/view]、/api/ground/cert | 证书 |
+| POST | /api/ground/cert/{id}/revoke | 吊销（仅安全主管），返回打回值守数 |
+| GET/POST/PUT | /api/watch、/api/watch/{id} | 值守查询/创建/改派 |
+| POST | /api/watch/{id}/operator-arrive、/operator-withdraw | 到位/撤回 |
+| POST | /api/watch/{id}/ready | 复核就绪（闸门+快照） |
+| POST | /api/watch/{id}/cancel | 取消（就绪仅主管） |
+| GET | /api/watch/route-entries?takeoff= | 航线入口当日汇总 |
+
+## 7. 生产 DDL 提醒
+
+生产为 `ddl-auto=validate + sql.init.mode=never`，新增表见 `schema.sql` 中的 `ground_staff / ground_cert / flight_watch`，
+既有 anchor 表需补列：`ALTER TABLE anchor ADD COLUMN anchor_zone VARCHAR(50) NULL COMMENT '所属锚点区域' AFTER location_desc;`
+
+## 8. 测试
+
+- `QualificationEvaluatorTest`：风级/区域单证覆盖、部分区域逐项缺口、多证不可拼凑、跨午夜按起飞时刻、端点日、吊销终态、待生效/过期。
+- `FlightWatchServiceTest / GroundCertServiceTest / WatchRequalifierTest / CurrentUserResolverTest`：状态闸门、职责分离、403 不改数据、吊销重判定与历史不动。
+- `GroundWatchIntegrationTest`（H2 + MockMvc，Redis 深桩）：端到端串起人员/证书/值守/航线入口的全部验收点，含改名后快照不变、跨午夜三端一致、改飞行日不能复活吊销证书。

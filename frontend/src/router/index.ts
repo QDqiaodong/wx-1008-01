@@ -27,6 +27,21 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/GroupBind.vue')
   },
   {
+    path: '/ground',
+    name: 'Ground',
+    component: () => import('../views/Ground.vue')
+  },
+  {
+    path: '/watch',
+    name: 'Watch',
+    component: () => import('../views/Watch.vue')
+  },
+  {
+    path: '/route-entry',
+    name: 'RouteEntry',
+    component: () => import('../views/RouteEntry.vue')
+  },
+  {
     path: '/logs',
     name: 'Logs',
     component: () => import('../views/Logs.vue')

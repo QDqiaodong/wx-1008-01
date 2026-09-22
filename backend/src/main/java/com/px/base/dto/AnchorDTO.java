@@ -17,4 +17,6 @@ public class AnchorDTO {
     private BigDecimal minWindSpeed;
     private BigDecimal maxWindSpeed;
     private String locationDesc;
+    /** 所属锚点区域（如 东区/西区/南区/北区/中区） */
+    private String anchorZone;
 }

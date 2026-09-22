@@ -38,6 +38,7 @@ public class AnchorService {
                 .minWindSpeed(dto.getMinWindSpeed())
                 .maxWindSpeed(dto.getMaxWindSpeed())
                 .locationDesc(dto.getLocationDesc())
+                .anchorZone(dto.getAnchorZone())
                 .status(1)
                 .build();
         
@@ -64,6 +65,7 @@ public class AnchorService {
         anchor.setMinWindSpeed(dto.getMinWindSpeed());
         anchor.setMaxWindSpeed(dto.getMaxWindSpeed());
         anchor.setLocationDesc(dto.getLocationDesc());
+        anchor.setAnchorZone(dto.getAnchorZone());
         
         Anchor saved = anchorRepository.save(anchor);
         updateRedisCache(saved);

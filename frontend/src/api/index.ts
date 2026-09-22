@@ -5,6 +5,21 @@ const request = axios.create({
   timeout: 10000
 })
 
+/**
+ * 每个写请求都带上“当前操作人”（顶栏选择，存 localStorage）。
+ * 注意：只传人员ID，角色由后端按库中档案判定，前端改不了权限。
+ */
+request.interceptors.request.use((config) => {
+  try {
+    const raw = localStorage.getItem('px-current-staff-id')
+    if (raw) {
+      config.headers = config.headers ?? {}
+      config.headers['X-Staff-Id'] = raw
+    }
+  } catch { /* ignore */ }
+  return config
+})
+
 request.interceptors.response.use(
   (response: AxiosResponse) => {
     const res = response.data
@@ -14,6 +29,10 @@ request.interceptors.response.use(
     return res.data
   },
   (error: AxiosError) => {
+    const res = error.response?.data as { message?: string } | undefined
+    if (res?.message) {
+      return Promise.reject(new Error(res.message))
+    }
     return Promise.reject(error)
   }
 )
@@ -30,6 +49,7 @@ export interface Anchor {
   minWindSpeed: number
   maxWindSpeed: number
   locationDesc: string
+  anchorZone?: string
   status: number
   createTime: string
   updateTime: string
@@ -41,6 +61,7 @@ export interface AnchorDTO {
   minWindSpeed: number
   maxWindSpeed: number
   locationDesc: string
+  anchorZone?: string
 }
 
 export interface FlightRoute {
@@ -181,4 +202,219 @@ export const groupBindingApi = {
     post<GroupRehearseResult>('/group-binding/rehearse', { routeId, anchorIds, operator }),
   submit: (routeId: number, anchorIds: number[], operator?: string) =>
     post<GroupSubmitResult>('/group-binding/submit', { routeId, anchorIds, operator })
+}
+
+/* ==================== 地勤资质与开航值守 ==================== */
+
+export type StaffRole = 'STATION_OFFICER' | 'SAFETY_OFFICER'
+export type CertStatus = 'PENDING' | 'VALID' | 'EXPIRED' | 'REVOKED'
+export type WatchStatus = 'DRAFT' | 'PENDING_REVIEW' | 'READY' | 'CANCELLED'
+
+export interface GroundStaff {
+  id: number
+  staffCode: string
+  staffName: string
+  staffRole: StaffRole
+  status: number
+}
+
+export interface GroundCert {
+  id: number
+  certNo: string
+  staffId: number
+  windLevels: string
+  anchorZones: string
+  effectiveDate: string
+  expiryDate: string
+  revoked: number
+  revokeTime?: string
+  revokeReason?: string
+  revokedByName?: string
+}
+
+export interface CertView {
+  id: number
+  certNo: string
+  staffId: number
+  staffName: string
+  windLevels: string[]
+  anchorZones: string[]
+  effectiveDate: string
+  expiryDate: string
+  status: CertStatus
+  referenceTime: string
+  revokeTime?: string
+  revokeReason?: string
+  revokedByName?: string
+}
+
+export interface Qualification {
+  staffId: number
+  staffName: string
+  qualified: boolean
+  activeCertNo: string | null
+  activeCertStatus: 'VALID' | 'PENDING' | 'EXPIRED' | 'REVOKED' | 'NONE'
+  coveredWindLevels: string[]
+  coveredZones: string[]
+  missingWindLevels: string[]
+  missingZones: string[]
+  detailMessages: string[]
+}
+
+export interface StaffView {
+  id: number
+  staffCode: string
+  staffName: string
+  staffRole: StaffRole
+  staffRoleLabel: string
+  status: number
+  referenceTime: string
+  certs: CertView[]
+  qualification: Qualification | null
+}
+
+export interface GroundCertDTO {
+  certNo: string
+  staffId: number
+  windLevels: string[]
+  anchorZones: string[]
+  effectiveDate: string
+  expiryDate: string
+}
+
+export interface WatchUpsertDTO {
+  routeId: number
+  operatorId: number
+  reviewerId: number
+  /** ISO 本地日期时间，如 2026-09-23T23:30:00 */
+  plannedTakeoff: string
+  plannedEnd?: string | null
+}
+
+export interface WatchView {
+  id: number
+  routeId: number
+  routeCode: string
+  routeName: string
+  flightDate: string
+  plannedTakeoff: string
+  plannedEnd: string | null
+  status: WatchStatus
+  statusLabel: string
+  operatorArrived: number
+  arrivalTime: string | null
+  reviewerArrived: number
+  reviewerArrivalTime: string | null
+  readyTime: string | null
+  readiedByName: string | null
+  cancelTime: string | null
+  cancelledByName: string | null
+  cancelReason: string | null
+  requalifyReason: string | null
+
+  operatorId: number
+  operatorName: string
+  reviewerId: number
+  reviewerName: string
+
+  operatorQualification: Qualification | null
+  reviewerQualification: Qualification | null
+  requiredWindLevel: string | null
+  requiredZones: string[] | null
+
+  distinctPeople: boolean
+  canReady: boolean
+  past: boolean
+
+  hasSnapshot: boolean
+  snapshotTakeoff: string | null
+  snapshotEnd: string | null
+  snapshotRouteWindLevel: string | null
+  snapshotRequiredZones: string[]
+  operatorSnapshotName: string | null
+  operatorSnapshotCertNo: string | null
+  operatorSnapshotScope: string | null
+  reviewerSnapshotName: string | null
+  reviewerSnapshotCertNo: string | null
+  reviewerSnapshotScope: string | null
+
+  policy: string
+}
+
+export interface RouteWatchEntry {
+  routeId: number
+  routeCode: string
+  routeName: string
+  windLevel: string
+  windSpeed: number
+  status: number
+  activeAnchorCodes: string[]
+  requiredZones: string[]
+  watchId: number | null
+  watchStatus: WatchStatus | null
+  watchStatusLabel: string | null
+  flightDate: string | null
+  operatorId: number | null
+  operatorName: string | null
+  reviewerId: number | null
+  reviewerName: string | null
+  operatorQualified: boolean
+  reviewerQualified: boolean
+  distinctPeople: boolean
+  operatorArrived: number | null
+  ready: boolean
+  gapMessages: string[] | null
+  policy: string
+}
+
+export interface GroundMeta {
+  windLevels: string[]
+  anchorZones: string[]
+  policy: string
+  rejectedReason: string
+}
+
+export const groundMetaApi = {
+  get: () => get<GroundMeta>('/ground/meta')
+}
+
+export const staffApi = {
+  list: (routeId?: number, takeoff?: string) => {
+    const params = new URLSearchParams()
+    if (routeId) params.set('routeId', String(routeId))
+    if (takeoff) params.set('takeoff', takeoff)
+    const qs = params.toString()
+    return get<StaffView[]>(`/ground/staff${qs ? `?${qs}` : ''}`)
+  },
+  active: () => get<GroundStaff[]>('/ground/staff/active'),
+  create: (data: { staffCode: string; staffName: string; staffRole: StaffRole }) =>
+    post<GroundStaff>('/ground/staff', data),
+  update: (id: number, data: { staffCode: string; staffName: string; staffRole: StaffRole }) =>
+    put<GroundStaff>(`/ground/staff/${id}`, data),
+  disable: (id: number) => del(`/ground/staff/${id}`),
+  policy: () => get<{ policy: string; rejectedReason: string }>('/ground/staff/policy')
+}
+
+export const certApi = {
+  create: (data: GroundCertDTO) => post<GroundCert>('/ground/cert', data),
+  revoke: (id: number, reason: string) =>
+    post<{ requalifiedWatches: number }>(`/ground/cert/${id}/revoke`, { reason })
+}
+
+export const watchApi = {
+  list: (routeId?: number) => get<WatchView[]>(`/watch${routeId ? `?routeId=${routeId}` : ''}`),
+  get: (id: number) => get<WatchView>(`/watch/${id}`),
+  routeEntries: (takeoff?: string) =>
+    get<RouteWatchEntry[]>(`/watch/route-entries${takeoff ? `?takeoff=${encodeURIComponent(takeoff)}` : ''}`),
+  create: (data: WatchUpsertDTO) => post<FlightWatchEntity>('/watch', data),
+  update: (id: number, data: WatchUpsertDTO) => put<FlightWatchEntity>(`/watch/${id}`, data),
+  operatorArrive: (id: number) => post<FlightWatchEntity>(`/watch/${id}/operator-arrive`),
+  operatorWithdraw: (id: number) => post<FlightWatchEntity>(`/watch/${id}/operator-withdraw`),
+  ready: (id: number) => post<FlightWatchEntity>(`/watch/${id}/ready`),
+  cancel: (id: number, reason: string) => post<FlightWatchEntity>(`/watch/${id}/cancel`, { reason })
+}
+
+export interface FlightWatchEntity {
+  id: number
+  status: WatchStatus
 }

@@ -14,7 +14,8 @@ const form = ref<AnchorDTO>({
   maxWeight: 0,
   minWindSpeed: 0,
   maxWindSpeed: 0,
-  locationDesc: ''
+  locationDesc: '',
+  anchorZone: ''
 })
 
 const windRange = ref([0, 20])
@@ -39,7 +40,8 @@ const handleAdd = () => {
     maxWeight: 0,
     minWindSpeed: 0,
     maxWindSpeed: 0,
-    locationDesc: ''
+    locationDesc: '',
+    anchorZone: ''
   }
   dialogVisible.value = true
 }
@@ -52,7 +54,8 @@ const handleEdit = (anchor: any) => {
     maxWeight: anchor.maxWeight,
     minWindSpeed: anchor.minWindSpeed,
     maxWindSpeed: anchor.maxWindSpeed,
-    locationDesc: anchor.locationDesc
+    locationDesc: anchor.locationDesc,
+    anchorZone: anchor.anchorZone ?? ''
   }
   dialogVisible.value = true
 }
@@ -121,6 +124,11 @@ onMounted(loadAnchors)
         </template>
       </ElTableColumn>
       <ElTableColumn prop="locationDesc" label="位置描述" />
+      <ElTableColumn prop="anchorZone" label="所属区域">
+        <template #default="scope">
+          <span>{{ scope.row.anchorZone || '—' }}</span>
+        </template>
+      </ElTableColumn>
       <ElTableColumn prop="status" label="状态">
         <template #default="scope">
           <span :class="scope.row.status === 1 ? 'text-green-600' : 'text-gray-400'">
@@ -153,6 +161,9 @@ onMounted(loadAnchors)
         </ElFormItem>
         <ElFormItem label="位置描述">
           <ElInput v-model="form.locationDesc" />
+        </ElFormItem>
+        <ElFormItem label="所属区域">
+          <ElInput v-model="form.anchorZone" placeholder="如 东区/西区/南区/北区/中区" />
         </ElFormItem>
       </ElForm>
       <template #footer>

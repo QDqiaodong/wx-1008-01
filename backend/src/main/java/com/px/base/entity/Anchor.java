@@ -35,6 +35,10 @@ public class Anchor {
     @Column(name = "location_desc", length = 200)
     private String locationDesc;
 
+    /** 所属锚点区域：资质证按区域授权，航线在用锚点涉及的全部区域都必须被证书覆盖 */
+    @Column(name = "anchor_zone", length = 50)
+    private String anchorZone;
+
     @Column(name = "status")
     @Builder.Default
     private Integer status = 1;
